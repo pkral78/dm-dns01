@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/docopt/docopt-go"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"os"
 	"strings"
@@ -30,26 +30,31 @@ func handleExit() {
 func sendCommand(command string, params string) map[string]interface{} {
 	var jsonStr = []byte(`{"command":"` + command + `","params":` + params + `}`)
 	req, err := http.NewRequest("POST", dmApi, bytes.NewBuffer(jsonStr))
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "dm-dns01: build request:", err)
+		os.Exit(1)
+	}
 	req.Header.Set("Content-Type", "text/plain; charset=UTF-8")
 	req.SetBasicAuth(dmUser, dmPasswd)
 
 	client := http.DefaultClient
 	resp, err := client.Do(req)
 	if err != nil {
-		panic(Exit{1})
+		fmt.Fprintln(os.Stderr, "dm-dns01: request failed:", err)
+		os.Exit(1)
 	}
 	defer resp.Body.Close()
 
-	fmt.Println("response Status:", resp.Status)
-	fmt.Println("response Headers:", resp.Header)
-	body, _ := ioutil.ReadAll(resp.Body)
-	fmt.Println("response Body:", string(body))
+	fmt.Fprintln(os.Stderr, "response Status:", resp.Status)
+	body, _ := io.ReadAll(resp.Body)
 
 	var result map[string]interface{}
 	if err := json.Unmarshal(body, &result); err != nil {
+		fmt.Fprintln(os.Stderr, "dm-dns01: bad JSON response:", string(body))
 		os.Exit(2)
 	}
 	if result["status"] != "success" {
+		fmt.Fprintln(os.Stderr, "dm-dns01: API error:", string(body))
 		os.Exit(3)
 	}
 	return result
@@ -95,6 +100,11 @@ func splitFQDN(fqdn string) (name string, domain string) {
 }
 
 func main() {
+	if dmUser == "" || dmPasswd == "" {
+		fmt.Fprintln(os.Stderr, "dm-dns01: DM_API_USER and DM_API_PASSWD must be set")
+		os.Exit(64)
+	}
+
 	usage := `Domain Master DNS01 acme exec provider
 
 Usage:
