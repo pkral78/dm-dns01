@@ -81,6 +81,19 @@ func delTxtRecord(name string, domain string) {
 	}
 }
 
+// splitFQDN splits a lego-supplied challenge FQDN (which carries a trailing dot,
+// e.g. "_acme-challenge.grafana.kralovi.net.") into the record name and the
+// registrable 2-label domain. Assumes a 2-label registrable domain (kralovi.net).
+func splitFQDN(fqdn string) (name string, domain string) {
+	labels := strings.Split(strings.TrimSuffix(fqdn, "."), ".")
+	if len(labels) < 2 {
+		return "", fqdn
+	}
+	domain = strings.Join(labels[len(labels)-2:], ".")
+	name = strings.Join(labels[:len(labels)-2], ".")
+	return name, domain
+}
+
 func main() {
 	usage := `Domain Master DNS01 acme exec provider
 
@@ -94,9 +107,7 @@ Options:
 	args, _ := docopt.ParseDoc(usage)
 
 	defer handleExit()
-	var fqdn = strings.Split(args["<fqdn>"].(string), ".")
-	var name = strings.Join(fqdn[:len(fqdn)-3], ".")
-	var domain = strings.Join(fqdn[len(fqdn)-3:len(fqdn)-1], ".")
+	name, domain := splitFQDN(args["<fqdn>"].(string))
 
 	if args["present"] == true {
 		addTxtRecord(name, domain, args["<txt>"].(string))
