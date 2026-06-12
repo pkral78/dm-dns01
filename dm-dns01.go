@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/docopt/docopt-go"
+	"golang.org/x/net/publicsuffix"
 	"io"
 	"net/http"
 	"os"
@@ -46,7 +47,11 @@ func sendCommand(command string, params string) map[string]interface{} {
 	defer resp.Body.Close()
 
 	fmt.Fprintln(os.Stderr, "response Status:", resp.Status)
-	body, _ := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "dm-dns01: read response:", err)
+		os.Exit(1)
+	}
 
 	var result map[string]interface{}
 	if err := json.Unmarshal(body, &result); err != nil {
@@ -88,14 +93,16 @@ func delTxtRecord(name string, domain string) {
 
 // splitFQDN splits a lego-supplied challenge FQDN (which carries a trailing dot,
 // e.g. "_acme-challenge.grafana.kralovi.net.") into the record name and the
-// registrable 2-label domain. Assumes a 2-label registrable domain (kralovi.net).
+// registrable domain. It uses the public suffix list so multi-label suffixes
+// (e.g. example.co.uk) resolve to the correct registrable domain.
 func splitFQDN(fqdn string) (name string, domain string) {
-	labels := strings.Split(strings.TrimSuffix(fqdn, "."), ".")
-	if len(labels) < 2 {
-		return "", fqdn
+	fqdn = strings.TrimSuffix(fqdn, ".")
+	domain, err := publicsuffix.EffectiveTLDPlusOne(fqdn)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "dm-dns01: cannot determine registrable domain:", err)
+		os.Exit(65)
 	}
-	domain = strings.Join(labels[len(labels)-2:], ".")
-	name = strings.Join(labels[:len(labels)-2], ".")
+	name = strings.TrimSuffix(strings.TrimSuffix(fqdn, domain), ".")
 	return name, domain
 }
 

@@ -7,6 +7,7 @@ func TestSplitFQDN(t *testing.T) {
 		{"_acme-challenge.grafana.kralovi.net.", "_acme-challenge.grafana", "kralovi.net"},
 		{"_acme-challenge.kralovi.net.", "_acme-challenge", "kralovi.net"},
 		{"_acme-challenge.grafana.kralovi.net", "_acme-challenge.grafana", "kralovi.net"}, // no trailing dot
+		{"_acme-challenge.foo.example.co.uk.", "_acme-challenge.foo", "example.co.uk"},   // multi-label public suffix
 	}
 	for _, c := range cases {
 		name, domain := splitFQDN(c.in)
